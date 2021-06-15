@@ -1,0 +1,446 @@
+---
+title: "Combined R code for preregistered analyses in Experiments 1 & 2"
+author: "Loukia Tzavella"
+date: "05/06/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+## R environment
+
+### R session info 
+
+> R version 4.0.5 (2021-03-31)
+Platform: x86_64-apple-darwin17.0 (64-bit)
+Running under: macOS Big Sur 11.2.3
+
+> attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+> other attached packages:
+[1] osfr_0.2.8        MBESS_4.8.0       trimr_1.0.1       jmv_1.2.23        data.table_1.14.0
+[6] here_1.0.1        plyr_1.8.6       
+
+> loaded via a namespace (and not attached):
+ [1] Rcpp_1.0.6        pillar_1.6.0      compiler_4.0.5    tools_4.0.5       digest_0.6.27    
+ [6] memoise_2.0.0     jsonlite_1.7.2    evaluate_0.14     lifecycle_1.0.0   tibble_3.1.1     
+[11] gtable_0.3.0      jmvcore_1.2.23    pkgconfig_2.0.3   rlang_0.4.11      curl_4.3.1       
+[16] crul_1.1.0        yaml_2.2.1        xfun_0.22         fastmap_1.1.0     httr_1.4.2       
+[21] dplyr_1.0.6       knitr_1.33        fs_1.5.0          generics_0.1.0    vctrs_0.3.8      
+[26] rprojroot_2.0.2   grid_4.0.5        tidyselect_1.1.1  httpcode_0.3.0    glue_1.4.2       
+[31] R6_2.5.0          fansi_0.4.2       rmarkdown_2.8     ggplot2_3.3.3     purrr_0.3.4      
+[36] magrittr_2.0.1    scales_1.1.1      ellipsis_0.3.2    htmltools_0.5.1.1 colorspace_2.0-1 
+[41] utf8_1.2.1        stringi_1.5.3     munsell_0.5.0     cachem_1.0.4      crayon_1.4.1     
+
+### Abbreviations
+
+> APP: Affective priming paradigm; GNG: Go/no-go training
+
+### Install and/or load required R packages
+
+```{r packages, message=FALSE, warning=FALSE}
+# Required R packages are shown below 
+required.packages <- c("plyr", "here", "data.table", "osfr")
+
+# If there are packages which are not already in your library these will be installed from CRAN
+new.packages <- required.packages[!(required.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages) > 0) {install.packages(required.packages)}
+
+require(plyr)
+require(here)
+require(data.table)
+require(osfr)
+
+# Current directory will be the same as the folder in which the R code is located
+here::dr_here()
+here::set_here()
+```
+
+## Import data files 
+
+### Download raw data files from OSF for both experiments
+
+```{r osf_files}
+# Retrieve files from the OSF data component ("Raw data for Experiments 1 & 2")
+osf_project <- osf_retrieve_node("https://osf.io/4dqzb/")
+osf_files <- osf_ls_files(osf_project)
+
+# Download zipped folders with the data and unzip in your local directory
+osf_download(osf_files, conflicts = "overwrite")
+
+unzip(here("osf_expt1.zip"))
+unzip(here("osf_expt2.zip"))
+```
+
+### Read csv files from both experiments and create data lists
+
+```{r data_lists, warning=FALSE}
+# Read file names 
+
+files1 <- list.files(here("osf_1"), all.files = TRUE, full.names = FALSE, no.. = TRUE, pattern = "\\.csv$")
+files2 <- list.files(here("osf_2"), all.files = TRUE, full.names = FALSE, no.. = TRUE, pattern = "\\.csv$")
+
+# Save data files for Experiment 1 (data1)
+
+data1 <- lapply(here("osf_1", files1), read.csv)
+
+# Save data files for Experiment 2 (data2)
+
+data2 <- lapply(here("osf_2", files2), read.csv)
+
+# Assign names to the list elements (subject IDs) 
+
+subs1 <- lapply(data1, function(x) x[1,1])
+subs2 <- lapply(data2, function(x) x[1,1])
+
+names(data1) <- subs1
+names(data2) <- subs2
+```
+
+### Match column names for both datasets
+
+```{r}
+# The column names differ as Experiment 2 was programmed using a later
+# Inquisit version which didn't add 'values.' on custom variable labels in the data
+
+expt2_names <- names(data2[[1]])
+data1 <- lapply(data1, setNames, expt2_names)
+```
+
+## Data preprocessing (priming, training, and ratings)
+
+### Load custom functions for data preprocessing
+
+```{r load_functions}
+source("Custom_functions.R")
+```
+
+### Check for and apply any data exclusions due to timing delays in the APP
+
+```{r timing_exclusions}
+#Select APP blocks 
+
+APP1 <- lapply(data1, subset, (blockcode == "APP1" | blockcode == "APP2"))
+APP2 <- lapply(data2, subset, (blockcode == "APP1" | blockcode == "APP2"))
+
+# Create variables for prime and mask duration (ms)
+
+APP1 <- lapply(APP1, transform, prime_ms = stimulusonset3 - stimulusonset2)
+APP1 <- lapply(APP1, transform, mask_ms = stimulusonset4 - stimulusonset3)
+
+APP2 <- lapply(APP2, transform, prime_ms = stimulusonset3 - stimulusonset2)
+APP2 <- lapply(APP2, transform, mask_ms = stimulusonset4 - stimulusonset3)
+
+# Create variable for timing errors- 1= exclude, 0=include
+
+APP1 <- lapply(APP1, transform, timing = as.integer(ifelse(prime_ms >= 283 | mask_ms >= 67, "1", "0")))
+APP2 <- lapply(APP2, transform, timing = as.integer(ifelse(prime_ms >= 283 | mask_ms >= 67, "1", "0")))
+
+# Get proportion of trials to be excluded
+
+APP_times1 <- ldply(APP1, function(x) mean(x$timing))
+APP_times2 <- ldply(APP2, function(x) mean(x$timing))
+
+# Retrieve IDs for participants who can be included in analyses
+
+APP_incl1 <- unique(APP_times1$.id[APP_times1$V1<0.25])
+APP_incl2 <- unique(APP_times2$.id[APP_times2$V1<0.25])
+
+# Remove participants (if any) from the APP data frame lists and original data lists 
+
+APP1 <- APP1[sapply(APP1, function(x) any(x$subject %in% APP_incl1))]
+APP2 <- APP2[sapply(APP2, function(x) any(x$subject %in% APP_incl2))]
+
+data1 <- data1[sapply(data1, function(x) any(x$subject %in% APP_incl1))]
+data2 <- data2[sapply(data2, function(x) any(x$subject %in% APP_incl2))]
+
+# Remove trials with timing delays from the data
+
+APP1 <- lapply(APP1, subset, timing==0)
+APP2 <- lapply(APP2, subset, timing==0)
+```
+
+### Seperate food and non-food prime trials 
+
+```{r}
+# Make two subsets for control and food prime trials
+# Note the column names differ as Experiment 2 was programmed using a later
+# Inquisit version which didn't add 'values.' on custom variable labels in the data 
+
+nonfood1 <- lapply(APP1, subset, prime_type == "nonfood")
+food1 <- lapply(APP1, subset, prime_type != "nonfood")
+
+nonfood2 <- lapply(APP2, subset, prime_type == "nonfood")
+food2 <- lapply(APP2, subset, prime_type != "nonfood")
+```
+
+### Re-code accuracy for all datasets
+
+```{r}
+#Recode accuracy values into 0s and 1s for descriptive statistics
+#Coding is reversed to get the proportion of error rates (ER); i.e., 1=incorrect; 0=correct
+
+nonfood1 <- lapply(nonfood1, transform, accuracy = as.integer(ifelse(accuracy == 1, "0", "1")))
+food1 <- lapply(food1, transform, accuracy = as.integer(ifelse(accuracy == 1, "0", "1")))
+
+nonfood2 <- lapply(nonfood2, transform, accuracy = as.integer(ifelse(accuracy == 1, "0", "1")))
+food2 <- lapply(food2, transform, accuracy = as.integer(ifelse(accuracy == 1, "0", "1")))
+
+#Clear factor levels from subsetted data list
+
+nonfood1 <- lapply(nonfood1, droplevels)
+food1 <- lapply(food1, droplevels)
+
+nonfood2 <- lapply(nonfood2, droplevels)
+food2 <- lapply(food2, droplevels)
+```
+
+### Apply functions to obtain descriptive statistics from the APP and create data frames for analyses
+
+```{r}
+#Error rates from non-food trials
+
+nonfood_ER1 <- ldply(nonfood1, NF_ER)
+nonfood_ER2 <- ldply(nonfood2, NF_ER)
+
+#Error rates from food trials
+
+food_ER1 <- ldply(food1, F_ER)
+food_ER2 <- ldply(food2, F_ER)
+
+#Create lists with correct trials
+#A new list is introduced here as access to the original list may be needed later on (e.g., data checks)
+
+nonfood_cor1 <- lapply(nonfood1, subset, accuracy==0)
+food_cor1 <- lapply(food1, subset, accuracy==0)
+
+nonfood_cor2 <- lapply(nonfood2, subset, accuracy==0)
+food_cor2 <- lapply(food2, subset, accuracy==0)
+
+#Median RTs of correct trials from non-food trials
+
+nonfood_RT1 <- ldply(nonfood_cor1, NF_RT)
+nonfood_RT2 <- ldply(nonfood_cor2, NF_RT)
+
+#Median RTs of correct trials from food trials
+
+food_RT1 <- ldply(food_cor1, F_RT)
+food_RT2 <- ldply(food_cor2, F_RT)
+
+#Bind both dataframes with descriptives together to get one file for all analyses
+
+nonfood_app1 <- cbind(nonfood_RT1, nonfood_ER1[2:4])
+food_app1 <- cbind(food_RT1, food_ER1[2:10])
+
+nonfood_app2 <- cbind(nonfood_RT2, nonfood_ER2[2:4])
+food_app2 <- cbind(food_RT2, food_ER2[2:10])
+```
+
+### Data exclusions based on APP performance 
+
+```{r}
+# Participants with error rates (ERs) greater or equal to 0.4 in either 
+# food or non-food prime trials are excluded from all respective analyses
+
+ER1_excl1 <- unique(c(unique(nonfood_app1$.id[nonfood_app1$ER>=0.4]), unique(food_app1$.id[food_app1$ER>=0.4])))
+
+ER1_excl2 <- unique(c(unique(nonfood_app2$.id[nonfood_app2$ER>=0.4]), unique(food_app2$.id[food_app2$ER>=0.4])))
+
+nonfood_app1 <- subset(nonfood_app1, !(.id %in% ER1_excl1))
+food_app1 <- subset(food_app1, !(.id %in% ER1_excl1))
+
+nonfood_app2 <- subset(nonfood_app2, !(.id %in% ER1_excl2))
+food_app2 <- subset(food_app2, !(.id %in% ER1_excl2))
+
+data1 <- data1[sapply(data1, function(x) any(!x$subject %in% ER1_excl1))]
+data2 <- data2[sapply(data2, function(x) any(!x$subject %in% ER1_excl2))]
+```
+
+### Data exclusions based on GNG performance 
+
+```{r}
+# Select GNG blocks 
+
+GNG1 <- lapply(data1, subset, blockcode=="GNG")
+GNG2 <- lapply(data2, subset, blockcode=="GNG")
+
+GNG1 <- lapply(GNG1, droplevels)
+GNG2 <- lapply(GNG2, droplevels)
+
+# Recode accuracy values into 0s and 1s for descriptive statistics
+
+GNG1 <- lapply(GNG1, transform, accuracy = as.integer(ifelse(accuracy==1, "0", "1")))
+GNG2 <- lapply(GNG2, transform, accuracy = as.integer(ifelse(accuracy==1, "0", "1")))
+
+GNG_ER1 <- ldply(GNG1, GNG_ER)
+GNG_ER2 <- ldply(GNG2, GNG_ER)
+
+# Participants who had a proportion of successful inhibitions (i.e., correct no-go responses) 
+# lower than 0.65 will be excluded
+
+ER2_excl1 <- unique(GNG_ER1$.id[GNG_ER1$nogo_ER>0.35])
+ER2_excl2 <- unique(GNG_ER2$.id[GNG_ER2$nogo_ER>0.35])
+
+nonfood_app1 <- subset(nonfood_app1, !(.id %in% ER2_excl1))
+food_app1 <- subset(food_app1, !(.id %in% ER2_excl1))
+
+nonfood_app2 <- subset(nonfood_app2, !(.id %in% ER2_excl2))
+food_app2 <- subset(food_app2, !(.id %in% ER2_excl2))
+
+data1 <- data1[sapply(data1, function(x) any(!x$subject %in% ER2_excl1))]
+data2 <- data2[sapply(data2, function(x) any(!x$subject %in% ER2_excl2))]
+
+GNG1 <- GNG1[sapply(GNG1, function(x) any(!x$subject %in% ER2_excl1))]
+GNG2 <- GNG2[sapply(GNG2, function(x) any(!x$subject %in% ER2_excl2))]
+
+GNG_ER1 <- subset(GNG_ER1, !(.id %in% ER2_excl1))
+GNG_ER2 <- subset(GNG_ER2, !(.id %in% ER2_excl2))
+```
+
+### Ratings from the explicit evaluation task (pre-and post-training)
+
+```{r}
+# Add unique code to ratings for training condition (go, no-go, untrained) 
+
+Liking1 <- lapply(data1, Liking)
+Liking2 <- lapply(data2, Liking)
+
+# Mean liking per training condition, pre- and post-training 
+# Also records the order of post-training tasks (Task_order)
+
+Eval1 <- ldply(Liking1, Mean_liking)
+Eval2 <- ldply(Liking2, Mean_liking)
+```
+
+## Create csvs with all data for analyses
+
+```{r}
+# Summary data files
+
+sum_data_expt1 <- cbind(nonfood_app1, food_app1[2:18], Eval1[2:8])
+sum_data_expt2 <- cbind(nonfood_app2, food_app2[2:18], Eval2[2:8])
+
+# Apply new column names 
+
+sum_names <- c("ID", "RTcon_NF", "RTinc_NF", 
+               "ER_NF", "ERcon_NF", "ERinc_NF", 
+               "RTcon_F", "RTinc_F",
+               "RTcon_go", "RTinc_go", 
+               "RTcon_nogo", "RTinc_nogo", 
+               "RTcon_untr", "RTinc_untr",
+               "ER_F", "ERcon_F", "ERinc_F", 
+               "ERcon_go", "ERinc_go", 
+               "ERcon_nogo", "ERinc_nogo",
+               "ERcon_untr", "ERinc_untr", 
+               "Task_order", 
+               "Pre_Go", "Pre_Nogo", "Pre_Untr", 
+               "Post_Go", "Post_Nogo", "Post_Untr")
+
+names(sum_data_expt1) <- sum_names
+names(sum_data_expt2) <- sum_names
+
+# Calculate RT priming effects (ΔRT) for each training condition:
+# go (DRT_go), no-go (DRT_nogo) and untrained (DRT_untr)
+
+sum_data_expt1$DRT_go = sum_data_expt1$RTinc_go - sum_data_expt1$RTcon_go
+sum_data_expt1$DRT_nogo = sum_data_expt1$RTinc_nogo - sum_data_expt1$RTcon_nogo
+sum_data_expt1$DRT_untr = sum_data_expt1$RTinc_untr - sum_data_expt1$RTcon_untr
+
+sum_data_expt2$DRT_go = sum_data_expt2$RTinc_go - sum_data_expt2$RTcon_go
+sum_data_expt2$DRT_nogo = sum_data_expt2$RTinc_nogo - sum_data_expt2$RTcon_nogo
+sum_data_expt2$DRT_untr = sum_data_expt2$RTinc_untr - sum_data_expt2$RTcon_untr
+
+# Calculate changes in explicit liking (ΔLiking) for each training condition:
+# go (DL_go), no-go (DL_nogo) and untrained (DL_untr)
+
+sum_data_expt1$DL_go = sum_data_expt1$Post_Go - sum_data_expt1$Pre_Go
+sum_data_expt1$DL_nogo = sum_data_expt1$Post_Nogo - sum_data_expt1$Pre_Nogo
+sum_data_expt1$DL_untr = sum_data_expt1$Post_Untr - sum_data_expt1$Pre_Untr
+
+sum_data_expt2$DL_go = sum_data_expt2$Post_Go - sum_data_expt2$Pre_Go
+sum_data_expt2$DL_nogo = sum_data_expt2$Post_Nogo - sum_data_expt2$Pre_Nogo
+sum_data_expt2$DL_untr = sum_data_expt2$Post_Untr - sum_data_expt2$Pre_Untr
+
+# Export created csv files to the current directory
+
+write.csv(sum_data_expt1, "sum_data_expt1.csv", row.names = FALSE)
+write.csv(sum_data_expt2, "sum_data_expt2.csv", row.names = FALSE)
+```
+
+## IQR outlier removal for supplementary analyses
+
+```{r}
+# First and third quartiles (25%, 75%) for ΔLiking in each training condition
+
+qnt_go1 = quantile(sum_data_expt1$DL_go, probs=c(.25,.75))
+qnt_go2 = quantile(sum_data_expt2$DL_go, probs=c(.25,.75))
+
+qnt_nogo1 = quantile(sum_data_expt1$DL_nogo, probs=c(.25,.75))
+qnt_nogo2 = quantile(sum_data_expt2$DL_nogo, probs=c(.25,.75))
+
+qnt_untr1 = quantile(sum_data_expt1$DL_untr, probs=c(.25,.75))
+qnt_untr2 = quantile(sum_data_expt2$DL_untr, probs=c(.25,.75))
+
+# Calculate the value for IQR times 1.5 to apply outlier exclusions ("iqt")
+
+iqt_go1 = 1.5*IQR(sum_data_expt1$DL_go)
+iqt_go2 = 1.5*IQR(sum_data_expt2$DL_go)
+
+iqt_nogo1 = 1.5*IQR(sum_data_expt1$DL_nogo)
+iqt_nogo2 = 1.5*IQR(sum_data_expt2$DL_nogo)
+
+iqt_untr1 = 1.5*IQR(sum_data_expt1$DL_untr)
+iqt_untr2 = 1.5*IQR(sum_data_expt2$DL_untr)
+
+# rm: remove // code outliers based on IQR for each training condition
+# Values greater than the third quartile plus the iqt will be removed
+# Values lower than the first quartile minus the iqt will be removed
+
+sum_data_expt1$rm_go <- ifelse((sum_data_expt1$DL_go < (qnt_go1[1] - iqt_go1))|(sum_data_expt1$DL_go > (qnt_go1[2] + iqt_go1)), "rm", "no")
+sum_data_expt2$rm_go <- ifelse((sum_data_expt2$DL_go < (qnt_go2[1] - iqt_go2))|(sum_data_expt2$DL_go > (qnt_go2[2] + iqt_go2)), "rm", "no")
+
+sum_data_expt1$rm_nogo <- ifelse((sum_data_expt1$DL_nogo < (qnt_nogo1[1] - iqt_nogo1))|(sum_data_expt1$DL_nogo > (qnt_nogo1[2] + iqt_nogo1)), "rm", "no")
+sum_data_expt2$rm_nogo <- ifelse((sum_data_expt2$DL_nogo < (qnt_nogo2[1] - iqt_nogo2))|(sum_data_expt2$DL_nogo > (qnt_nogo2[2] + iqt_nogo2)), "rm", "no")
+
+sum_data_expt1$rm_untr <- ifelse((sum_data_expt1$DL_untr < (qnt_untr1[1] - iqt_untr1))|(sum_data_expt1$DL_untr > (qnt_untr1[2] + iqt_untr1)), "rm", "no")
+sum_data_expt2$rm_untr <- ifelse((sum_data_expt2$DL_untr < (qnt_untr2[1] - iqt_untr2))|(sum_data_expt2$DL_untr > (qnt_untr2[2] + iqt_untr2)), "rm", "no")
+
+# Save summary data without the outliers
+
+sum_data_expt1_iqr <- subset(sum_data_expt1, rm_nogo=="no"&rm_go=="no"&rm_untr=="no")
+sum_data_expt2_iqr <- subset(sum_data_expt2, rm_nogo=="no"&rm_go=="no"&rm_untr=="no")
+
+# Export csv files to the current directory
+
+write.csv(sum_data_expt1_iqr, "sum_data_expt1_iqr.csv", row.names = FALSE)
+write.csv(sum_data_expt2_iqr, "sum_data_expt2_iqr.csv", row.names = FALSE)
+```
+
+## Log transformed data for supplementary analyses
+
+```{r}
+# Subset data to keep only relevant columns (RTs)
+
+sum_data_expt1_log <- subset(sum_data_expt1, select=c(1:3,7:14))
+sum_data_expt2_log <- subset(sum_data_expt2, select=c(1:3,7:14))
+
+# Log-transform RTs
+
+sum_data_expt1_log <- log(sum_data_expt1_log[2:11])
+sum_data_expt2_log <- log(sum_data_expt2_log[2:11])
+
+# Recalculate priming effects with logRTs
+
+sum_data_expt1_log$DRT_go = sum_data_expt1_log$RTinc_go - sum_data_expt1_log$RTcon_go
+sum_data_expt1_log$DRT_nogo = sum_data_expt1_log$RTinc_nogo - sum_data_expt1_log$RTcon_nogo
+sum_data_expt1_log$DRT_untr = sum_data_expt1_log$RTinc_untr - sum_data_expt1_log$RTcon_untr
+
+sum_data_expt2_log$DRT_go = sum_data_expt2_log$RTinc_go - sum_data_expt2_log$RTcon_go
+sum_data_expt2_log$DRT_nogo = sum_data_expt2_log$RTinc_nogo - sum_data_expt2_log$RTcon_nogo
+sum_data_expt2_log$DRT_untr = sum_data_expt2_log$RTinc_untr - sum_data_expt2_log$RTcon_untr
+
+# Export csv files to the current directory
+
+write.csv(sum_data_expt1_log, "sum_data_expt1_log.csv", row.names = FALSE)
+write.csv(sum_data_expt2_log, "sum_data_expt2_log.csv", row.names = FALSE)
+```

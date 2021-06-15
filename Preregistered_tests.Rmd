@@ -1,0 +1,324 @@
+---
+title: "Preregistered tests"
+author: "Loukia Tzavella"
+date: "06/06/2021"
+output: html_document
+---
+> This script requires access to csv files which are created during data preprocessing
+> Please use the Rmd file "Data_preprocessing" first to export the files to your current directory
+
+## R environment and data files
+
+### Install and/or load required R packages
+
+```{r packages, message=FALSE, warning=FALSE}
+# Required R packages are shown below 
+required.packages <- c("plyr", "here", "jmv", "trimr", "MBESS", "BayesFactor")
+
+# If there are packages which are not already in your library these will be installed from CRAN
+new.packages <- required.packages[!(required.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages) > 0) {install.packages(required.packages)}
+
+require(plyr)
+require(here)
+require(jmv)
+require(trimr)
+require(MBESS)
+require(BayesFactor)
+
+# Current directory will be the same as the folder in which the R code is located
+here::dr_here()
+here::set_here()
+```
+
+### Import summary data files
+
+```{r read_csvs}
+# Main summary data (priming measures and ratings)
+sum1 <- read.csv(here("sum_data_expt1.csv"), header = TRUE)
+sum2 <- read.csv(here("sum_data_expt2.csv"), header = TRUE)
+
+# Rating data without outliers 
+sum1_iqr <- read.csv(here("sum_data_expt1_iqr.csv"), header = TRUE)
+sum2_iqr <- read.csv(here("sum_data_expt2_iqr.csv"), header = TRUE)
+
+# Log transformed RTs (priming) 
+sum1_log <- read.csv(here("sum_data_expt1_log.csv"), header = TRUE)
+sum2_log <- read.csv(here("sum_data_expt2_log.csv"), header = TRUE)
+```
+
+## Effect size calculation
+
+> The code below has been adapted from [https://github.com/Lakens/anchor_based_methods_SESOI/blob/master/effect_size_d_paired_function.R](https://github.com/Lakens/anchor_based_methods_SESOI/blob/master/effect_size_d_paired_function.R)
+
+> I have created a custom function for calculating Cohen's dav and the CI for dav as there are too many tests to run these calculations for manually each time. 
+
+```{r cohens_dav}
+CohensDav <- function(measure1, measure2, N, data, ttest) {
+  
+  # Calculate SDs 
+  sd1 <- sd(data[[measure1]])
+  sd2 <- sd(data[[measure2]])
+  
+  # Calculate mean differences 
+  mdiff <- mean(data[[measure1]] - data[[measure2]])
+  
+  # Calculate average SD
+  sav <- sqrt((sd1^2 + sd2^2) / 2)
+  
+  # Calculate Cohen's dav 
+  dav <- mdiff / sav
+  
+  # Number of observations
+  N = nrow(data)
+
+  # T-values from performed t-test
+  tval <- as.numeric(ttest[[1]]$asDF[4])
+  
+  # SDs of the difference scores
+  sdiff <- sd(data[[measure1]] - data[[measure2]])
+  
+  # Confidence limits
+  limits <- conf.limits.nct(t.value = tval, df = N - 1, conf.level = 0.95)
+  
+  # Lower and upper limits for Cohen's dav
+  # lci: lower CI / uci: upper CI
+
+  lci <- limits$Lower.Limit * sdiff / (sav * sqrt(N))
+  uci <- limits$Upper.Limit * sdiff / (sav * sqrt(N))
+  
+  # Result to print
+  result <- paste("dav =", round(dav,4), 
+                  "lower CI =", round(lci, 4), 
+                  "upper CI =", round(uci, 4))
+  
+  return(result)
+} 
+```
+
+## Preregistered tests 
+
+### Bayesian t-tests for Experiment 1
+
+```{r H1_BF_expt1, warning=FALSE}
+H1a.BF1 <- ttestBF(x = sum1$DL_nogo, y = sum1$DL_go, paired = TRUE, rscale = "medium", nullInterval = c(-Inf, 0))
+
+H1b.BF1 <- ttestBF(x = sum1$DL_nogo, y = sum1$DL_untr, paired = TRUE, rscale = "medium", nullInterval = c(-Inf, 0))
+
+paste("H1a;", "BF10 =", round(as.numeric(exp(H1a.BF1@bayesFactor$bf[1])),2))
+paste("H1b;", "BF10 =", round(as.numeric(exp(H1b.BF1@bayesFactor$bf[1])),2))
+```
+
+```{r H2_BF_expt1, warning=FALSE}
+H2a.BF1 <- ttestBF(x = sum1$DRT_nogo, y = sum1$DRT_go, paired = TRUE, rscale = "medium", nullInterval = c(-Inf, 0))
+
+H2b.BF1 <- ttestBF(x = sum1$DRT_nogo, y = sum1$DRT_untr, paired = TRUE, rscale = "medium", nullInterval = c(-Inf, 0))
+
+paste("H2a;", "BF10 =", round(as.numeric(exp(H2a.BF1@bayesFactor$bf[1])),2))
+paste("H2b;", "BF10 =", round(as.numeric(exp(H2b.BF1@bayesFactor$bf[1])),2))
+```
+
+```{r H3_BF_expt1, warning=FALSE}
+H3.BF1 <- ttestBF(x = sum1$RTcon_NF, y = sum1$RTinc_NF, paired = TRUE, rscale = "medium", nullInterval = c(-Inf, 0))
+
+paste("H3;", "BF10 =", round(as.numeric(exp(H3.BF1@bayesFactor$bf[1])),2))
+```
+
+### Frequentist t-tests for Experiment 1
+
+```{r H1_ST_expt1, warning=FALSE}
+H1a.ST1 <- ttestPS(sum1, pairs = list(list(i1 = "DL_nogo", i2 = "DL_go")), hypothesis = "twoGreater", desc = TRUE)
+
+H1b.ST1 <- ttestPS(sum1, pairs = list(list(i1 = "DL_nogo", i2 = "DL_untr")), hypothesis = "twoGreater", desc = TRUE)
+
+c("H1a", H1a.ST1, 
+  CohensDav(measure1 = 'DL_nogo', measure2 = 'DL_go',
+          N = nrow(sum1), data = sum1, ttest = H1a.ST1))
+
+c("H1b", H1b.ST1, 
+  CohensDav(measure1 = 'DL_nogo', measure2 = 'DL_untr',
+          N = nrow(sum1), data = sum1, ttest = H1b.ST1))
+```
+
+```{r H2_ST_expt1, warning=FALSE}
+H2a.ST1 <- ttestPS(sum1, pairs = list(list(i1 = "DRT_nogo", i2 = "DRT_go")), hypothesis = "twoGreater", desc = TRUE)
+
+H2b.ST1 <- ttestPS(sum1, pairs = list(list(i1 = "DRT_nogo", i2 = "DRT_untr")), hypothesis = "twoGreater", desc = TRUE)
+
+c("H2a", H2a.ST1, 
+  CohensDav(measure1 = 'DRT_nogo', measure2 = 'DRT_go',
+          N = nrow(sum1), data = sum1, ttest = H2a.ST1))
+
+c("H2b", H2b.ST1, 
+  CohensDav(measure1 = 'DRT_nogo', measure2 = 'DRT_untr',
+          N = nrow(sum1), data = sum1, ttest = H2b.ST1))
+```
+
+```{r H3_ST_expt1, warning=FALSE}
+H3.ST1 <- ttestPS(sum1, pairs = list(list(i1 = "RTcon_NF", i2 = "RTinc_NF")), hypothesis = "twoGreater", desc = TRUE)
+
+c("H3", H3.ST1,
+  CohensDav(measure1 = 'RTcon_NF', measure2 = 'RTinc_NF',
+          N = nrow(sum1), data = sum1, ttest = H3.ST1))
+```
+
+### Frequentist t-tests for Experiment 2
+
+```{r H1_ST_expt2, warning=FALSE}
+H1a.ST2 <- ttestPS(sum2, pairs = list(list(i1 = "DL_nogo", i2 = "DL_go")), hypothesis = "twoGreater", desc = TRUE)
+
+H1b.ST2 <- ttestPS(sum2, pairs = list(list(i1 = "DL_nogo", i2 = "DL_untr")), hypothesis = "twoGreater", desc = TRUE)
+
+c("H1a", H1a.ST2, 
+  CohensDav(measure1 = 'DL_nogo', measure2 = 'DL_go',
+          N = nrow(sum2), data = sum2, ttest = H1a.ST2))
+
+c("H1b", H1b.ST2, 
+  CohensDav(measure1 = 'DL_nogo', measure2 = 'DL_untr',
+          N = nrow(sum2), data = sum2, ttest = H1b.ST2))
+```
+```{r H2_ST_expt2, warning=FALSE}
+H2a.ST2 <- ttestPS(sum2, pairs = list(list(i1 = "DRT_nogo", i2 = "DRT_go")), hypothesis = "twoGreater", desc = TRUE)
+
+H2b.ST2 <- ttestPS(sum2, pairs = list(list(i1 = "DRT_nogo", i2 = "DRT_untr")), hypothesis = "twoGreater", desc = TRUE)
+
+c("H2a", H2a.ST2, 
+  CohensDav(measure1 = 'DRT_nogo', measure2 = 'DRT_go',
+          N = nrow(sum2), data = sum2, ttest = H2a.ST2))
+
+c("H2b", H2b.ST2, 
+  CohensDav(measure1 = 'DRT_nogo', measure2 = 'DRT_untr',
+          N = nrow(sum2), data = sum2, ttest = H2b.ST2))
+```
+
+```{r H3_ST_expt2, warning=FALSE}
+H3.ST2 <- ttestPS(sum2, pairs = list(list(i1 = "RTcon_NF", i2 = "RTinc_NF")), hypothesis = "twoGreater", desc = TRUE)
+
+c("H3", H3.ST2,
+  CohensDav(measure1 = 'RTcon_NF', measure2 = 'RTinc_NF',
+          N = nrow(sum2), data = sum2, ttest = H3.ST2))
+```
+
+```{r H4_ST_expt2}
+H4a.ST2 <- ttestPS(sum2, pairs = list(list(i1 = "RTcon_go", i2 = "RTinc_go")), hypothesis = "twoGreater", desc = TRUE)
+
+H4b.ST2 <- ttestPS(sum2, pairs = list(list(i1 = "RTcon_untr", i2 = "RTinc_untr")), hypothesis = "twoGreater", desc = TRUE)
+
+H4c.ST2 <- ttestPS(sum2, pairs = list(list(i1 = "RTcon_nogo", i2 = "RTinc_nogo")), hypothesis = "twoGreater", desc = TRUE)
+
+c("H4a", H4a.ST2,
+  CohensDav(measure1 = 'RTcon_go', measure2 = 'RTinc_go',
+          N = nrow(sum2), data = sum2, ttest = H4a.ST2))
+
+c("H4b", H4b.ST2,
+  CohensDav(measure1 = 'RTcon_untr', measure2 = 'RTinc_untr',
+          N = nrow(sum2), data = sum2, ttest = H4b.ST2))
+
+c("H4c", H4c.ST2,
+  CohensDav(measure1 = 'RTcon_nogo', measure2 = 'RTinc_nogo',
+          N = nrow(sum2), data = sum2, ttest = H4c.ST2))
+```
+
+###  Tests with outliers removed (both experiments)
+
+```{r H1_BF_expt1_iqr, warning=FALSE}
+H1a.BF1_iqr <- ttestBF(x = sum1_iqr$DL_nogo, y = sum1_iqr$DL_go, paired = TRUE, rscale = "medium", nullInterval = c(-Inf, 0))
+
+H1b.BF1_iqr <- ttestBF(x = sum1_iqr$DL_nogo, y = sum1_iqr$DL_untr, paired = TRUE, rscale = "medium", nullInterval = c(-Inf, 0))
+
+paste("H1a;", "BF10 =", round(as.numeric(exp(H1a.BF1_iqr@bayesFactor$bf[1])),2))
+paste("H1b;", "BF10 =", round(as.numeric(exp(H1b.BF1_iqr@bayesFactor$bf[1])),2))
+```
+
+> Bayesian ttests not available here for Experiment 2
+
+```{r H1_ST_expt1_iqr}
+H1a.ST1_iqr <- ttestPS(sum1_iqr, pairs = list(list(i1 = "DL_nogo", i2 = "DL_go")), hypothesis = "twoGreater", desc = TRUE)
+
+H1b.ST1_iqr <- ttestPS(sum1_iqr, pairs = list(list(i1 = "DL_nogo", i2 = "DL_untr")), hypothesis = "twoGreater", desc = TRUE)
+
+c("H1a", H1a.ST1_iqr,
+  CohensDav(measure1 = 'DL_nogo', measure2 = 'DL_go',
+          N = nrow(sum1_iqr), data = sum1_iqr, ttest = H1a.ST1_iqr))
+
+c("H1b", H1b.ST1_iqr,
+  CohensDav(measure1 = 'DL_nogo', measure2 = 'DL_untr',
+          N = nrow(sum1_iqr), data = sum1_iqr, ttest = H1b.ST1_iqr))
+```
+
+```{r H1_ST_expt2_iqr}
+H1a.ST2_iqr <- ttestPS(sum2_iqr, pairs = list(list(i1 = "DL_nogo", i2 = "DL_go")), hypothesis = "twoGreater", desc = TRUE)
+
+H1b.ST2_iqr <- ttestPS(sum2_iqr, pairs = list(list(i1 = "DL_nogo", i2 = "DL_untr")), hypothesis = "twoGreater", desc = TRUE)
+
+c("H1a", H1a.ST2_iqr,
+  CohensDav(measure1 = 'DL_nogo', measure2 = 'DL_go',
+          N = nrow(sum2_iqr), data = sum2_iqr, ttest = H1a.ST2_iqr))
+
+c("H1b", H1b.ST2_iqr,
+  CohensDav(measure1 = 'DL_nogo', measure2 = 'DL_untr',
+          N = nrow(sum2_iqr), data = sum2_iqr, ttest = H1b.ST2_iqr))
+```
+### Log transformed data
+
+```{r H2_ST_expt1_log, warning=FALSE}
+H2a.ST1_log <- ttestPS(sum1_log, pairs = list(list(i1 = "DRT_nogo", i2 = "DRT_go")), hypothesis = "twoGreater", desc = TRUE)
+H2b.ST1_log <- ttestPS(sum1_log, pairs = list(list(i1 = "DRT_nogo", i2 = "DRT_untr")), hypothesis = "twoGreater", desc = TRUE)
+
+c("H2a", H2a.ST1_log,
+  CohensDav(measure1 = 'DRT_nogo', measure2 = 'DRT_go',
+          N = nrow(sum1_log), data = sum1_log, ttest = H2a.ST1_log))
+
+c("H2b", H2b.ST1_log,
+  CohensDav(measure1 = 'DRT_nogo', measure2 = 'DRT_untr',
+          N = nrow(sum1_log), data = sum1_log, ttest = H2b.ST1_log))
+```
+
+```{r H3_ST_expt1_log, warning=FALSE}
+H3.ST1_log <- ttestPS(sum1_log, pairs = list(list(i1 = "RTcon_NF", i2 = "RTinc_NF")), hypothesis = "twoGreater", desc = TRUE)
+
+c("H3", H3.ST1_log,
+  CohensDav(measure1 = 'RTcon_NF', measure2 = 'RTinc_NF',
+          N = nrow(sum1_log), data = sum1_log, ttest = H3.ST1_log))
+```
+
+```{r H2_ST_expt2_log, warning=FALSE}
+H2a.ST2_log <- ttestPS(sum2_log, pairs = list(list(i1 = "DRT_nogo", i2 = "DRT_go")), hypothesis = "twoGreater", desc = TRUE)
+H2b.ST2_log <- ttestPS(sum2_log, pairs = list(list(i1 = "DRT_nogo", i2 = "DRT_untr")), hypothesis = "twoGreater", desc = TRUE)
+
+c("H2a", H2a.ST2_log,
+  CohensDav(measure1 = 'DRT_nogo', measure2 = 'DRT_go',
+          N = nrow(sum2_log), data = sum2_log, ttest = H2a.ST2_log))
+
+c("H2b", H2b.ST2_log,
+  CohensDav(measure1 = 'DRT_nogo', measure2 = 'DRT_untr',
+          N = nrow(sum2_log), data = sum2_log, ttest = H2b.ST2_log))
+```
+
+```{r H3_ST_expt2_log, warning=FALSE}
+H3.ST2_log <- ttestPS(sum2_log, pairs = list(list(i1 = "RTcon_NF", i2 = "RTinc_NF")), hypothesis = "twoGreater", desc = TRUE)
+
+c("H3", H3.ST2_log,
+  CohensDav(measure1 = 'RTcon_NF', measure2 = 'RTinc_NF',
+          N = nrow(sum2_log), data = sum2_log, ttest = H3.ST2_log))
+```
+
+```{r H4_ST_expt2_log}
+H4a.ST2_log <- ttestPS(sum2_log, pairs = list(list(i1 = "RTcon_go", i2 = "RTinc_go")), hypothesis = "twoGreater", desc = TRUE)
+
+H4b.ST2_log <- ttestPS(sum2_log, pairs = list(list(i1 = "RTcon_untr", i2 = "RTinc_untr")), hypothesis = "twoGreater", desc = TRUE)
+
+H4c.ST2_log <- ttestPS(sum2_log, pairs = list(list(i1 = "RTcon_nogo", i2 = "RTinc_nogo")), hypothesis = "twoGreater", desc = TRUE)
+
+c("H4a", H4a.ST2_log,
+  CohensDav(measure1 = 'RTcon_go', measure2 = 'RTinc_go',
+          N = nrow(sum2_log), data = sum2_log, ttest = H4a.ST2_log))
+
+c("H4b", H4b.ST2_log,
+  CohensDav(measure1 = 'RTcon_untr', measure2 = 'RTinc_untr',
+          N = nrow(sum2_log), data = sum2_log, ttest = H4b.ST2_log))
+
+c("H4c", H4c.ST2_log,
+  CohensDav(measure1 = 'RTcon_nogo', measure2 = 'RTinc_nogo',
+          N = nrow(sum2_log), data = sum2_log, ttest = H4c.ST2_log))
+```
