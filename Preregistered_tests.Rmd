@@ -13,7 +13,7 @@ output: html_document
 
 ```{r packages, message=FALSE, warning=FALSE}
 # Required R packages are shown below 
-required.packages <- c("plyr", "here", "jmv", "trimr", "MBESS", "BayesFactor")
+required.packages <- c("plyr", "here", "jmv", "MBESS", "BayesFactor")
 
 # If there are packages which are not already in your library these will be installed from CRAN
 new.packages <- required.packages[!(required.packages %in% installed.packages()[,"Package"])]
@@ -22,7 +22,6 @@ if(length(new.packages) > 0) {install.packages(required.packages)}
 require(plyr)
 require(here)
 require(jmv)
-require(trimr)
 require(MBESS)
 require(BayesFactor)
 
