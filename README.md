@@ -9,7 +9,7 @@
 <br></br>
 * There are two main scripts for convenience. First, the [Data_preprocessing.Rmd](https://github.com/LTzavella/Devaluation_analyses/blob/master/Data_preprocessing.Rmd) file should be used to download, read and preprocess the raw data from both experiments. The code will also create summary csv data files. 
 * Second, the [Preregistered_test.Rmd](https://github.com/LTzavella/Devaluation_analyses/blob/master/Preregistered_tests.Rmd) file can be used to run preregistered analyses - primary and supplementary - with the exception of Bayesian tests for Experiment 2 which were conducted in JASP. 
-
+* For the preregistered tests I am using a custom function to calculate Cohen's dav and CIs which has been adapted from [https://github.com/Lakens/anchor_based_methods_SESOI/blob/master/effect_size_d_paired_function.R](https://github.com/Lakens/anchor_based_methods_SESOI/blob/master/effect_size_d_paired_function.R).
 
 Shield: [![CC BY 4.0][cc-by-shield]][cc-by]
 
