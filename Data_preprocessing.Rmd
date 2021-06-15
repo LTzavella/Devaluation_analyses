@@ -10,27 +10,15 @@ output:
 
 ### R session info 
 
-> R version 4.0.5 (2021-03-31)
-Platform: x86_64-apple-darwin17.0 (64-bit)
-Running under: macOS Big Sur 11.2.3
+> R version 4.1.0 (2021-05-18)
 
 > attached base packages:
 [1] stats     graphics  grDevices utils     datasets  methods   base     
 
 > other attached packages:
-[1] osfr_0.2.8        MBESS_4.8.0       trimr_1.0.1       jmv_1.2.23        data.table_1.14.0
-[6] here_1.0.1        plyr_1.8.6       
-
-> loaded via a namespace (and not attached):
- [1] Rcpp_1.0.6        pillar_1.6.0      compiler_4.0.5    tools_4.0.5       digest_0.6.27    
- [6] memoise_2.0.0     jsonlite_1.7.2    evaluate_0.14     lifecycle_1.0.0   tibble_3.1.1     
-[11] gtable_0.3.0      jmvcore_1.2.23    pkgconfig_2.0.3   rlang_0.4.11      curl_4.3.1       
-[16] crul_1.1.0        yaml_2.2.1        xfun_0.22         fastmap_1.1.0     httr_1.4.2       
-[21] dplyr_1.0.6       knitr_1.33        fs_1.5.0          generics_0.1.0    vctrs_0.3.8      
-[26] rprojroot_2.0.2   grid_4.0.5        tidyselect_1.1.1  httpcode_0.3.0    glue_1.4.2       
-[31] R6_2.5.0          fansi_0.4.2       rmarkdown_2.8     ggplot2_3.3.3     purrr_0.3.4      
-[36] magrittr_2.0.1    scales_1.1.1      ellipsis_0.3.2    htmltools_0.5.1.1 colorspace_2.0-1 
-[41] utf8_1.2.1        stringi_1.5.3     munsell_0.5.0     cachem_1.0.4      crayon_1.4.1     
+[1] BayesFactor_0.9.12-4.2 Matrix_1.3-3           coda_0.19-4           
+[4] MBESS_4.8.0            jmv_1.2.23             osfr_0.2.8            
+[7] here_1.0.1             plyr_1.8.6       
 
 ### Abbreviations
 
@@ -40,7 +28,7 @@ Running under: macOS Big Sur 11.2.3
 
 ```{r packages, message=FALSE, warning=FALSE}
 # Required R packages are shown below 
-required.packages <- c("plyr", "here", "data.table", "osfr")
+required.packages <- c("plyr", "here", "osfr")
 
 # If there are packages which are not already in your library these will be installed from CRAN
 new.packages <- required.packages[!(required.packages %in% installed.packages()[,"Package"])]
@@ -48,7 +36,6 @@ if(length(new.packages) > 0) {install.packages(required.packages)}
 
 require(plyr)
 require(here)
-require(data.table)
 require(osfr)
 
 # Current directory will be the same as the folder in which the R code is located
