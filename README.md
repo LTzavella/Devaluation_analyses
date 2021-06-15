@@ -12,10 +12,10 @@
 * For the preregistered tests I am using a custom function to calculate Cohen's dav and CIs which has been adapted from [https://github.com/Lakens/anchor_based_methods_SESOI/blob/master/effect_size_d_paired_function.R](https://github.com/Lakens/anchor_based_methods_SESOI/blob/master/effect_size_d_paired_function.R).
 
 #### R Packages 
-[plyr](https://github.com/hadley/plyr)
-[here](https://github.com/r-lib/here)
-[jmv](https://github.com/jamovi/jmv)
-[BayesFactor](https://richarddmorey.github.io/BayesFactor/)
+[plyr](https://github.com/hadley/plyr); 
+[here](https://github.com/r-lib/here); 
+[jmv](https://github.com/jamovi/jmv); 
+[BayesFactor](https://richarddmorey.github.io/BayesFactor/); 
 [MBESS](https://www3.nd.edu/~kkelley/site/MBESS.html)
 
 Shield: [![CC BY 4.0][cc-by-shield]][cc-by]
